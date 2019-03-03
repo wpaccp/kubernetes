@@ -1,0 +1,594 @@
+                                              corosync+pacemaker+mariadb高可用集群配置
+1.1 mariadb高可用集群的网络规划表
+   ---------------------------------------------------------------------------
+   |主机名     |    Ip地址       | VIP地址         | 描述                      |
+   ---------------------------------------------------------------------------
+   |host1     |192.168.100.151  |192.168.100.240  |mariadb,corosync+pacemaker|
+   ---------------------------------------------------------------------------
+   |host2     |192.168.100.152  |192.168.100.240  |mariadb,corosync+pacemaker|
+   ---------------------------------------------------------------------------
+   |host3     |192.168.100.153  |192.168.100.240  |mariadb.corosync+pacemaker|
+   ---------------------------------------------------------------------------
+1.2 配置主机名，时间同步，关闭防火墙和selinux
+1.2.1 配置三台节点的主机名
+[root@node1 ~]# hostname node1
+[root@node2 ~]# hostname node2
+[root@node3 ~]# hostname node3
+
+[root@node1 ~]# cat /etc/hostname
+node1
+[root@node2 ~]# cat /etc/hostname
+node2
+[root@node3 ~]# cat /etc/hostname
+node3
+
+[root@node1 ~]# cat /etc/hosts
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+192.168.100.153 node3
+192.168.100.152 node2
+192.168.100.151 node1
+
+[root@node2 corosync]# cat /etc/hosts
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+192.168.100.153 node3
+192.168.100.152 node2
+192.168.100.151 node1
+
+[root@node3 corosync]# cat /etc/hosts
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+192.168.100.153 node3
+192.168.100.152 node2
+192.168.100.151 node1
+1.2.2 配置时间同步
+[root@node1 ~]# vi /etc/ntp.conf
+修改如下内容为:
+# Use public servers from the pool.ntp.org project.
+# Please consider joining the pool (http://www.pool.ntp.org/join.html).
+server time1.aliyun.com iburst
+#server 1.centos.pool.ntp.org iburst
+#server 2.centos.pool.ntp.org iburst
+#server 3.centos.pool.ntp.org iburst
+[root@node1 ~]# systemctl restart ntpd
+[root@node2 ~]# ntpdate 192.168.100.151
+[root@node3 ~]# ntpdate 192.168.100.151
+
+1.2.3 关闭防火墙和selinux
+[root@node1 ~]# systemctl stop firewalld.service
+[root@node1 ~]# getenforce
+Disabled
+
+[root@node2 ~]# systemctl stop firewalld.service
+[root@node2 ~]# getenforce
+Disabled
+
+[root@node3 ~]# systemctl stop firewalld.service
+[root@node3 ~]# getenforce
+Permissive
+
+[root@node1 ~]# ssh-keygen -t rsa
+[root@node2 ~]# ssh-keygen -t rsa
+[root@node3 ~]# ssh-keygen -t rsa
+[root@node1 ~]# ssh-copy-id root@node2
+[root@node1 ~]# ssh-copy-id root@node3
+
+1.3 安装mariadb数据库
+1.3.1 安装mariadb数据库
+[root@node1 ~]# yum install -y MariaDB-server MariaDB-client
+[root@node2 ~]# yum install -y MariaDB-server MariaDB-client
+[root@node3 ~]# yum install -y MariaDB-server MariaDB-client
+[root@node1 ~]# systemctl start mariadb.service
+[root@node2 ~]# systemctl start mariadb.service
+[root@node3 ~]# systemctl start mariadb.service
+[root@node1 ~]# mysql_secure_installation
+1)Enter current password for root (enter for none): 直接回车
+2)Set root passowrd? [Y/n] y
+  New password: 123456
+  Re-enter new password: 123456
+3)Remove anonymous users? [Y/n] y
+4)Disallow root login remotely? [Y/n] y
+5)Reload privilege tables now? [Y/n] y
+
+[root@node2 ~]# mysql_secure_installation
+1)Enter current password for root (enter for none): 直接回车
+2)Set root passowrd? [Y/n] y
+  New password: 123456
+  Re-enter new password: 123456
+3)Remove anonymous users? [Y/n] y
+4)Disallow root login remotely? [Y/n] y
+5)Reload privilege tables now? [Y/n] y
+
+[root@node3 ~]# mysql_secure_installation
+1)Enter current password for root (enter for none): 直接回车
+2)Set root passowrd? [Y/n] y
+  New password: 123456
+  Re-enter new password: 123456
+3)Remove anonymous users? [Y/n] y
+4)Disallow root login remotely? [Y/n] y
+5)Reload privilege tables now? [Y/n] y
+
+[root@node1 ~]# mysql -uroot -p123456
+Welcome to the MariaDB monitor.  Commands end with ; or \g.
+Your MariaDB connection id is 2
+Server version: 10.1.34-MariaDB MariaDB Server
+
+Copyright (c) 2000, 2018, Oracle, MariaDB Corporation Ab and others.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+MariaDB [(none)]>
+
+[root@node2 ~]# mysql -uroot -p123456
+Welcome to the MariaDB monitor.  Commands end with ; or \g.
+Your MariaDB connection id is 2
+Server version: 10.1.34-MariaDB MariaDB Server
+
+Copyright (c) 2000, 2018, Oracle, MariaDB Corporation Ab and others.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+MariaDB [(none)]>
+
+[root@node3 ~]# mysql -uroot -p123456
+Welcome to the MariaDB monitor.  Commands end with ; or \g.
+Your MariaDB connection id is 2
+Server version: 10.1.34-MariaDB MariaDB Server
+
+Copyright (c) 2000, 2018, Oracle, MariaDB Corporation Ab and others.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+MariaDB [(none)]>
+
+[root@node1 ~]# systemctl enable mariadb.service
+[root@node2 ~]# systemctl enable mariadb.service
+[root@node3 ~]# systemctl enable mariadb.service
+
+[root@node1 ~]# systemctl stop mariadb.service
+[root@node2 ~]# systemctl stop mariadb.service
+[root@node3 ~]# systemctl stop mariadb.service
+
+1.4 安装和配置corosync,pacemaker
+1.4.1 安装corosync,pacemaker
+[root@node1 ~]# yum -y install psmisc cifs-utils quota
+[root@node1 ~]# yum install -y corosync pacemaker
+
+[root@node2 ~]# yum -y install psmisc cifs-utils quota
+[root@node2 ~]# yum install -y corosync pacemaker
+
+[root@node3 ~]# yum -y install psmisc cifs-utils quota
+[root@node3 ~]# yum install -y corosync pacemaker
+
+1.3.2 配置corosync和pacemaker
+[root@node1 ~]# cd /etc/corosync
+[root@node3 corosync]# ll
+total 20
+-r--------. 1 root root  128 Jul 23 12:14 authkey
+-rw-r--r--. 1 root root  677 Jul 23 10:35 corosync.conf
+-rw-r--r--. 1 root root 2881 May  9 22:04 corosync.conf.example
+-rw-r--r--. 1 root root  767 May  9 22:04 corosync.conf.example.udpu
+-rw-r--r--. 1 root root 3278 May  9 22:04 corosync.xml.example
+drwxr-xr-x. 2 root root    6 May  9 22:04 uidgid.d
+[root@node1 corosync]# cp corosync.conf.example corosync.conf
+[root@node1 corosync]# vi corosync.conf
+# Please read the corosync.conf.5 manual page
+totem {
+        version: 2
+
+        crypto_cipher: aes128
+        crypto_hash: sha1
+            secauth: on
+        interface {
+                ringnumber: 0
+                bindnetaddr: 192.168.100.0
+                mcastaddr: 239.185.1.13
+                mcastport: 5405
+                ttl: 1
+        }
+}
+
+nodelist {
+        node {
+            ring0_addr: 192.168.100.151
+            nodeid: 1
+        }
+
+        node {
+            ring0_addr: 192.168.100.152
+            nodeid: 2
+        }
+
+        node {
+            ring0_addr: 192.168.100.153
+            nodeid: 3
+        }
+}
+
+logging {
+        fileline: off
+        to_stderr: no
+        to_logfile: yes
+        logfile: /var/log/cluster/corosync.log
+        to_syslog: no
+        debug: off
+        timestamp: on
+        logger_subsys {
+                subsys: QUORUM
+                debug: off
+        }
+}
+
+quorum {
+        provider: corosync_votequorum
+}
+[root@node1 corosync]# scp corosync.conf node2:/etc/corosync/corosync.conf
+[root@node1 corosync]# scp corosync.conf node3:/etc/corosync/corosync.conf
+
+[root@node1 ~]# corosync-keygen
+[root@node1 ~]# cd /etc/corosync/
+[root@node1 corosync]# scp -p authkey node2:/etc/corosync/authkey
+[root@node1 corosync]# scp -p authkey node3:/etc/corosync/authkey
+[root@node1 ~]# systemctl start corosync.service
+[root@node2 ~]# systemctl start corosync.service
+[root@node3 ~]# systemctl start corosync.service
+[root@node1 ~]# tail -f /var/log/cluster/corosync.log 
+
+[root@node1 ~]# crm
+crm(live)# configure
+#配置VIP地址资源
+crm(live)configure# primitive mysql_vip ocf:heartbeat:IPaddr2 params ip="192.168.100.240" op monitor interval=30s timeout=20s
+crm(live)configure# verify
+#配置mariadb资源
+crm(live)configure# primitive mysqlserver systemd:mariadb op monitor interval=20s timeout=20s
+crm(live)configure# verify
+#配置排列约束(mysql_vip和mysqlserver必须在一起)
+crm(live)configure# colocation mysqlserver_with_mysql_vip inf: mysqlserver mysql_vip
+crm(live)configure# verify
+#配置顺序约束(要求先启动mysql_vip,再启动mysqlserver)
+crm(live)configure# order mysqlserver_after_mysql_vip Mandatory: mysql_vip mysqlserver
+crm(live)configure# verify
+#配置位置约束(要求mysql_vip对node1节点的倾向性为100，也就是当node1节点下线后，资源会切换到node2上，如果node1重新上线后，资源会重新返回到node1节点上)
+crm(live)configure# location mysqlserver_pref_node1 mysql_vip 100: node1
+crm(live)configure# verify
+#配置粘性(当node1节点下线后，资源会切换到node2上，如果node1重新上线后，资源不会返回到node1节点上)
+crm(live)configure# property default-resource-stickiness=50
+crm(live)configure# verify
+ERROR: Warnings found during check: config may not be valid
+crm(live)configure# commit
+#提交所有配置
+crm(live)configure# commit
+#显示配置信息
+crm(live)configure# show
+node 1: node1 \
+        attributes standby=off
+node 2: node2 \
+        attributes standby=off
+node 3: node3
+primitive mysql_vip IPaddr2 \
+        params ip=192.168.100.240 \
+        op monitor interval=30s timeout=20s
+primitive mysqlserver systemd:mariadb \
+        op monitor interval=30s timeout=100s
+order mysqlserver_after_mysql_vip Mandatory: mysql_vip mysqlserver
+location mysqlserver_pref_node1 mysql_vip 100: node1
+colocation mysqlserver_with_mysql_vip inf: mysqlserver mysql_vip
+property cib-bootstrap-options: \
+        have-watchdog=false \
+        dc-version=1.1.18-11.el7_5.3-2b07d5c5a9 \
+        cluster-infrastructure=corosync \
+        stonith-enabled=false \
+        default-resource-stickiness=50
+
+
+                                  Corosync+Pacemaker+nfs实现http高可用性
+1.1 httpd 高可用集群的网络规划表
+   ---------------------------------------------------------------------------
+   |主机名     |    Ip地址       | VIP地址         | 描述                      |
+   ---------------------------------------------------------------------------
+   |host1     |192.168.100.151  |192.168.100.240  |http,corosync+pacemaker   |
+   ---------------------------------------------------------------------------
+   |host2     |192.168.100.152  |192.168.100.240  |http,corosync+pacemaker   |
+   ---------------------------------------------------------------------------
+   |host3     |192.168.100.153  |192.168.100.240  |nfs                       |
+   ---------------------------------------------------------------------------
+1.2 配置主机名，时间同步，关闭防火墙和selinux
+1.2.1 配置三台节点的主机名
+[root@node1 ~]# hostname node1
+[root@node2 ~]# hostname node2
+[root@node3 ~]# hostname node3
+
+[root@node1 ~]# cat /etc/hostname
+node1
+[root@node2 ~]# cat /etc/hostname
+node2
+[root@node3 ~]# cat /etc/hostname
+node3
+
+[root@node1 ~]# cat /etc/hosts
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+192.168.100.153 node3
+192.168.100.152 node2
+192.168.100.151 node1
+
+[root@node2 corosync]# cat /etc/hosts
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+192.168.100.153 node3
+192.168.100.152 node2
+192.168.100.151 node1
+
+[root@node3 corosync]# cat /etc/hosts
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+192.168.100.153 node3
+192.168.100.152 node2
+192.168.100.151 node1
+1.2.2 配置时间同步
+[root@node1 ~]# vi /etc/ntp.conf
+修改如下内容为:
+# Use public servers from the pool.ntp.org project.
+# Please consider joining the pool (http://www.pool.ntp.org/join.html).
+server time1.aliyun.com iburst
+#server 1.centos.pool.ntp.org iburst
+#server 2.centos.pool.ntp.org iburst
+#server 3.centos.pool.ntp.org iburst
+[root@node1 ~]# systemctl restart ntpd
+[root@node2 ~]# ntpdate 192.168.100.151
+[root@node3 ~]# ntpdate 192.168.100.151
+
+1.2.3 关闭防火墙和selinux
+[root@node1 ~]# systemctl stop firewalld.service
+[root@node1 ~]# getenforce
+Disabled
+
+[root@node2 ~]# systemctl stop firewalld.service
+[root@node2 ~]# getenforce
+Disabled
+
+[root@node3 ~]# systemctl stop firewalld.service
+[root@node3 ~]# getenforce
+Permissive
+
+[root@node1 ~]# ssh-keygen -t rsa
+[root@node2 ~]# ssh-keygen -t rsa
+[root@node3 ~]# ssh-keygen -t rsa
+[root@node1 ~]# ssh-copy-id root@node2
+[root@node1 ~]# ssh-copy-id root@node3
+
+1.3 安装和配置apache服务
+[root@node1 ~]# yum install -y httpd
+[root@node1 ~]# echo "welcome to access node1" > /var/www/html/index.html
+[root@node1 ~]# systemctl start httpd.service
+[root@node1 ~]# curl node1
+welcome to access node1
+[root@node1 ~]# systemctl enable httpd.service
+Created symlink from /etc/systemd/system/multi-user.target.wants/httpd.service to /usr/lib/systemd/system/httpd.service.
+[root@node1 ~]# systemctl stop  httpd.service
+
+[root@node2 ~]# yum install -y httpd
+[root@node2 ~]# echo "welcome to access to node2" > /var/www/html/index.html
+[root@node2 ~]# systemctl start httpd.service
+[root@node2 ~]# curl node2
+welcome to access to node2
+[root@node2 ~]# systemctl enable httpd.service
+Created symlink from /etc/systemd/system/multi-user.target.wants/httpd.service to /usr/lib/systemd/system/httpd.service.
+[root@node2 ~]# systemctl stop httpd.service
+
+[root@node3 ~]# yum install -y httpd
+[root@node3 ~]# echo "welcome to access node3" >/var/www/html/index.html
+[root@node3 ~]# systemctl start httpd.service
+[root@node3 ~]# curl node3
+welcome to access node3
+[root@node3 ~]# systemctl enable httpd.service
+Created symlink from /etc/systemd/system/multi-user.target.wants/httpd.service to /usr/lib/systemd/system/httpd.service.
+[root@node3 ~]# systemctl stop httpd.service
+
+1.4 安装和配置corosync,pacemaker,crmsh
+1.4.1 安装corosync,pacemaker,crmsh
+[root@node1 ~]# yum -y install psmisc cifs-utils quota
+[root@node1 ~]# yum install -y corosync pacemaker
+[root@node1 ~]# yum install -y crmsh
+
+[root@node2 ~]# yum -y install psmisc cifs-utils quota
+[root@node2 ~]# yum install -y corosync pacemaker
+[root@node2 ~]# yum install -y crmsh
+
+1.4.2 配置corosync,pacemaker
+
+[root@node1 corosync]# vi corosync.conf
+
+        node {
+            ring0_addr: 192.168.100.153
+            nodeid: 3
+        }
+# Please read the corosync.conf.5 manual page
+totem {
+        version: 2
+
+        crypto_cipher: aes128
+        crypto_hash: sha1
+            secauth: on
+        interface {
+                ringnumber: 0
+                bindnetaddr: 192.168.100.0
+                mcastaddr: 239.185.1.13
+                mcastport: 5405
+                ttl: 1
+        }
+}
+
+nodelist {
+        node {
+            ring0_addr: 192.168.100.151
+            nodeid: 1
+        }
+
+        node {
+            ring0_addr: 192.168.100.152
+            nodeid: 2
+        }
+
+}
+
+logging {
+        fileline: off
+        to_stderr: no
+        to_logfile: yes
+        logfile: /var/log/cluster/corosync.log
+        to_syslog: no
+        debug: off
+        timestamp: on
+        logger_subsys {
+                subsys: QUORUM
+                debug: off
+        }
+}
+
+quorum {
+        provider: corosync_votequorum
+}
+[root@node1 corosync]# chmod 600 authkey
+[root@node1 corosync]# scp -p authkey corosync.conf node2:/etc/corosync/
+authkey                                                                                    100%  128     0.1KB/s   00:00    
+corosync.conf 
+
+[root@node1 corosync]# systemctl start corosync.service
+[root@node1 corosync]# systemctl status corosync.service
+
+[root@node2 ~]# systemctl start corosync.service
+[root@node2 ~]# systemctl status corosync.service
+
+[root@node1 corosync]# systemctl start pacemaker
+[root@node1 corosync]# systemctl status pacemaker
+
+[root@node2 ~]# systemctl start pacemaker
+[root@node2 ~]# systemctl status pacemaker
+
+[root@node1 corosync]# tail -f /var/log/cluster/corosync.log 
+Jul 24 18:02:17 [8702] node1 corosync info    [QB    ] server name: votequorum
+Jul 24 18:02:17 [8702] node1 corosync notice  [SERV  ] Service engine loaded: corosync cluster quorum service v0.1 [3]
+Jul 24 18:02:17 [8702] node1 corosync info    [QB    ] server name: quorum
+Jul 24 18:02:17 [8702] node1 corosync notice  [TOTEM ] A new membership (192.168.100.151:4) was formed. Members joined: 1
+Jul 24 18:02:17 [8702] node1 corosync notice  [QUORUM] Members[1]: 1
+Jul 24 18:02:17 [8702] node1 corosync notice  [MAIN  ] Completed service synchronization, ready to provide service.
+Jul 24 18:02:17 [8702] node1 corosync notice  [TOTEM ] A new membership (192.168.100.151:1312) was formed. Members joined: 2
+Jul 24 18:02:17 [8702] node1 corosync notice  [QUORUM] This node is within the primary component and will provide service.
+Jul 24 18:02:17 [8702] node1 corosync notice  [QUORUM] Members[2]: 1 2
+Jul 24 18:02:17 [8702] node1 corosync notice  [MAIN  ] Completed service synchronization, ready to provide service.
+
+1.5 安装nfs服务
+[root@node3 ~]# yum install -y nfs nfs-utils rpcbind
+[root@node3 ~]# mkdir /www/htdocs -pv
+mkdir: created directory ‘/www’
+mkdir: created directory ‘/www/htdocs’
+[root@node3 ~]# vi /etc/exports
+/www/htdocs 192.168.100.0/24(rw)
+[root@node3 ~]# systemctl status rpcbind
+[root@node3 ~]# systemctl restart nfs
+[root@node3 ~]# showmount -e 192.168.100.153
+Export list for 192.168.100.153:
+/www/htdocs 192.168.100.0/24
+
+[root@node1 ~]# mount -t nfs 192.168.100.153:/www/htdocs /var/www/html/
+[root@node1 ~]# mount
+192.168.100.153:/www/htdocs on /var/www/html type nfs4 (rw,relatime,vers=4.1,rsize=131072,wsize=131072,namlen=255,hard,proto=tcp,port=0,timeo=600,retrans=2,sec=sys,clientaddr=192.168.100.151,local_lock=none,addr=192.168.100.153)
+[root@node1 ~]# cd /var/www/html
+[root@node1 html]# cat index.html 
+Test page on NFS Server
+[root@node1 ~]# umount /var/www/html
+
+[root@node2 ~]# mount -t nfs 192.168.100.153:/www/htdocs /var/www/html/
+[root@node2 ~]# mount
+192.168.100.153:/www/htdocs on /var/www/html type nfs4 (rw,relatime,vers=4.1,rsize=131072,wsize=131072,namlen=255,hard,proto=tcp,port=0,timeo=600,retrans=2,sec=sys,clientaddr=192.168.100.152,local_lock=none,addr=192.168.100.153)
+[root@node2 ~]# cd /var/www/html
+[root@node2 html]# ls -l
+total 4
+-rw-r--r-- 1 root root 24 Jul 24 17:22 index.html
+[root@node2 html]# cat index.html 
+Test page on NFS Server
+[root@node2 ~]# umount /var/www/html
+
+[root@node3 ~]# systemctl enable rpcbind
+Created symlink from /etc/systemd/system/multi-user.target.wants/rpcbind.service to /usr/lib/systemd/system/rpcbind.service.
+[root@node3 ~]# systemctl enable nfs
+Created symlink from /etc/systemd/system/multi-user.target.wants/nfs-server.service to /usr/lib/systemd/system/nfs-server.service.
+
+1.6 配置crmsh
+[root@node1 corosync]# crm
+crm(live)# configure
+crm(live)configure# 
+crm(live)configure# property stonith-enabled=false
+crm(live)configure# primitive webip ocf:heartbeat:IPaddr2 params ip="192.168.100.240" op monitor interval=30s timeout=20s
+crm(live)configure# verify
+
+crm(live)configure# primitive webserver systemd:httpd op monitor interval=20s timeout=100s
+crm(live)configure# verify
+
+crm(live)configure# primitive webstore ocf:heartbeat:Filesystem params device="192.168.100.153:/www/htdocs" directory="/var/www/html/" fstype="nfs" op start timeout=60s interval=0 op stop timeout=60s interval=0 op monitor interval=20s timeout=40s
+crm(live)configure# verify
+
+crm(live)configure# colocation webserver_with_webstore_and_webip inf: webserver (webip webstore)
+crm(live)configure# verify
+crm(live)configure# order webstore_after_webip Mandatory: webip webstore
+crm(live)configure# order webserver_after_webstore Mandatory: webstore webserver
+crm(live)configure# commit
+
+附录1
+集群常用命令及作用
+1、验证群集安装
+# pacemakerd -F                 ## 查看pacemaker组件
+# corosync-cfgtool -s           ## 查看corosync序号
+# corosync-cmapctl | grep members ## corosync 2.3.x
+# corosync-objctl | grep members  ## corosync 1.4.x
+
+2、查看群集资源
+# pcs resource standards   ## 查看支持资源类型
+# pcs resource providers   ## 查看资源提供商
+# pcs resource agents      ## 查看所有资源代理
+# pcs resource list        ## 查看支持资源列表
+# pcs stonith list         ## 查看支持Fence列表
+# pcs property list --all  ## 显示群集默认变量参数
+# crm_simulate -sL         ## 检验资源 score 值
+
+3、使用群集脚本
+# pcs cluster cib ra_cfg    ## 将群集资源配置信息保存在指定文件
+# pcs -f ra_cfg resource create   ##创建群集资源并保存在指定文件中（而非保存在运行配置）
+# pcs -f ra_cfg resource show     ## 显示指定文件的配置信息，检查无误后
+# pcs cluster cib-push ra_cfg     ## 将指定配置文件加载到运行配置中
+
+4、STONITH 设备操作
+# stonith_admin -I                 ## 查询fence设备
+# stonith_admin -M -a agent_name   ## 查询fence设备的元数据， stonith_admin -M -a fence_vmware_soap
+# stonith_admin --reboot nodename  ## 测试 STONITH 设备
+
+5、查看群集配置
+# crm_verify -L -V     ## 检查配置有无错误
+# pcs property         ## 查看群集属性
+# pcs stonith          ## 查看stonith
+# pcs constraint       ## 查看资源约束
+# pcs config           ## 查看群集资源配置
+# pcs cluster cib      ## 以XML格式显示群集配置
+
+6、管理群集
+# pcs status           ## 查看群集状态
+# pcs status cluster
+# pcs status corosync                                           
+# pcs cluster stop [node11]  ## 停止群集
+# pcs cluster start --all    ## 启动群集
+# pcs cluster standby node11 ## 将节点置为后备standby状态 pcs cluster unstandby node11
+# pcs cluster destroy [--all]      ## 删除群集，[--all]同时恢复corosync.conf文件
+# pcs resource cleanup ClusterIP   ## 清除指定资源的状态与错误计数
+# pcs stonith cleanup vmware-fencing  ## 清除Fence资源的状态与错误计数
+
+
+
+
+
+
+
+
+
+
